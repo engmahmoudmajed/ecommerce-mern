@@ -50,7 +50,7 @@ const setCookies = (res, accessToken, refreshToken) => {
 };
 
 // =========================
-// Signup
+// 1) Signup
 // =========================
 export const signup = async (req, res) => {
   try {
@@ -104,12 +104,164 @@ export const signup = async (req, res) => {
 // Login
 // =========================
 export const login = async (req, res) => {
-  res.send("Login Route Called");
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    const isPasswordCorrect = await user.comparePassword(password);
+
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user._id);
+
+    await storeRefreshToken(user._id.toString(), refreshToken);
+
+    setCookies(res, accessToken, refreshToken);
+
+    res.status(200).json({
+      message: "User logged in successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+// =========================
+// 2) Logout
+// =========================
+export const logout = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(400).json({
+        message: "Refresh token not found",
+      });
+    }
+
+    // Verify refresh token
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    // Delete refresh token from Redis
+    await redis.del(`refresh_token:${decoded.userId}`);
+
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    res.status(200).json({
+      message: "Logged out successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+
+};
+
+
+// =========================
+// 2) this will be used to refresh the access token using the refresh token
+// =========================
+export const refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(400).json({
+        message: "Refresh token not found",
+      });
+    }
+
+    // Verify refresh token
+    // check if it real toke come from use cookies not fake
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    // Check if the refresh token exists in Redis
+    const storedRefreshToken = await redis.get(
+      `refresh_token:${decoded.userId}`
+    );
+
+    if (!storedRefreshToken || storedRefreshToken !== refreshToken) {
+      return res.status(401).json({
+        message: "Invalid refresh token",
+      });
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(
+      decoded.userId
+    );
+
+    // Store new refresh token in Redis
+    await storeRefreshToken(decoded.userId, newRefreshToken);
+
+    // Set cookies
+    setCookies(res, accessToken, newRefreshToken);
+
+    res.status(200).json({
+      message: "Access token refreshed successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
 };
 
 // =========================
-// Logout
+// 3) Get Current User
 // =========================
-export const logout = async (req, res) => {
-  res.send("Logout Route Called");
-};
+export const getCurrentUser = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findById(userId).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      user,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};  
+// =========================
+
