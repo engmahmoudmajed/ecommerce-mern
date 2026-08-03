@@ -2,11 +2,10 @@ import express from "express";
 import "dotenv/config"; 
 import cookieParser from "cookie-parser";
 
-import { fileURLToPath } from "url";
 import { connectDB } from "./lib/db.js";
 //---
 import authRoutes from "./routes/auth.route.js"
-
+import productRoutes from "./routes/product.route.js"
 
 //------- connect To DB
 
@@ -21,6 +20,7 @@ app.use(express.json());
 // what mean its allow me to read coolies browser send with request to me in backend
 app.use(cookieParser());
 app.use("/api/auth", authRoutes)
+app.use("/api/products", productRoutes)
 
 
 app.get('/', (req, res) => {
