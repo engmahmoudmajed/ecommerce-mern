@@ -8,7 +8,7 @@ import {
   getRecommendedProducts,
   getProductsByCategory,
   toggleFeaturedProduct
-} from "../controllers/product.controler.js"
+} from "../controllers/product.controller.js"
 import {protectRoute,adminRoute} from "../middlewares/auth.middleware.js"
 
 router.get("/",protectRoute,adminRoute,getAllProducts);
